@@ -1,4 +1,7 @@
 import { useNavigate } from 'react-router-dom'
+import Navbar from '../components/Navbar'
+import StartAssessmentModal from '../components/StartAssessmentModal'
+import { useState } from 'react'
 
 const STATS = [
     { value: '10', label: 'Questions' },
@@ -38,6 +41,7 @@ const SCORING = [
 
 export default function Dashboard() {
     const navigate = useNavigate()
+    const [showStart, setShowStart] = useState(false)
 
     // Get candidate name from sessionStorage (set during login)
     const candidate = (() => {
@@ -47,57 +51,7 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col">
-
-            {/* ── Navbar ── */}
-            <nav
-                className="flex items-center justify-between px-8 py-4 border-b border-white/10"
-                style={{ backgroundColor: '#26215C' }}
-            >
-                <div className="flex items-center gap-3">
-                    <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ backgroundColor: '#534AB7', color: '#CECBF6' }}
-                    >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                            <circle cx="12" cy="12" r="3" />
-                            <line x1="12" y1="2" x2="12" y2="6" />
-                            <line x1="12" y1="18" x2="12" y2="22" />
-                            <line x1="4.22" y1="4.22" x2="7.05" y2="7.05" />
-                            <line x1="16.95" y1="16.95" x2="19.78" y2="19.78" />
-                            <line x1="2" y1="12" x2="6" y2="12" />
-                            <line x1="18" y1="12" x2="22" y2="12" />
-                            <line x1="4.22" y1="19.78" x2="7.05" y2="16.95" />
-                            <line x1="16.95" y1="7.05" x2="19.78" y2="4.22" />
-                        </svg>
-                    </div>
-                    <span className="text-sm font-medium" style={{ color: '#EEEDFE' }}>PatternIQ</span>
-                </div>
-
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                        <div
-                            className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium"
-                            style={{ backgroundColor: '#534AB7', color: '#CECBF6' }}
-                        >
-                            {firstName[0].toUpperCase()}
-                        </div>
-                        <span className="text-sm" style={{ color: '#AFA9EC' }}>{firstName}</span>
-                    </div>
-                    <button
-                        onClick={() => {
-                            sessionStorage.clear()
-                            navigate('/login')
-                        }}
-                        className="text-xs px-3 py-1.5 rounded-lg transition-colors"
-                        style={{ color: '#7F77DD', border: '0.5px solid #3C3489' }}
-                        onMouseEnter={e => e.currentTarget.style.backgroundColor = '#3C3489'}
-                        onMouseLeave={e => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                        Sign out
-                    </button>
-                </div>
-            </nav>
+            <Navbar />
 
             {/* ── Main content ── */}
             <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10 flex flex-col gap-8">
@@ -195,36 +149,6 @@ export default function Dashboard() {
                             </div>
                         </div>
 
-                        {/* Important note */}
-                        <div
-                            className="rounded-2xl p-5 flex flex-col gap-2"
-                            style={{ backgroundColor: '#EEEDFE' }}
-                        >
-                            <div className="flex items-center gap-2">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                                    stroke="#534AB7" strokeWidth="2" strokeLinecap="round">
-                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                    <line x1="12" y1="9" x2="12" y2="13" />
-                                    <line x1="12" y1="17" x2="12.01" y2="17" />
-                                </svg>
-                                <p className="text-xs font-medium" style={{ color: '#3C3489' }}>
-                                    Before you start
-                                </p>
-                            </div>
-                            <ul className="flex flex-col gap-1.5 list-none">
-                                {[
-                                    'Assessment cannot be paused once started',
-                                    'Ensure a stable internet connection',
-                                    'Find a quiet, distraction-free space',
-                                ].map((note) => (
-                                    <li key={note} className="flex items-start gap-2">
-                                        <span className="mt-1.5 w-1 h-1 rounded-full flex-shrink-0" style={{ backgroundColor: '#7F77DD' }} />
-                                        <span className="text-xs leading-relaxed" style={{ color: '#534AB7' }}>{note}</span>
-                                    </li>
-                                ))}
-                            </ul>
-                        </div>
-
                     </div>
                 </div>
 
@@ -235,9 +159,9 @@ export default function Dashboard() {
                         <p className="text-xs text-gray-400">Your time starts as soon as you click begin.</p>
                     </div>
                     <button
-                        onClick={() => navigate('/assessment')}
+                        onClick={() => setShowStart(true)}
                         className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
-                       text-white transition-all active:scale-[0.98] flex-shrink-0"
+               text-white transition-all active:scale-[0.98] flex-shrink-0"
                         style={{ backgroundColor: '#534AB7' }}
                         onMouseEnter={e => e.currentTarget.style.backgroundColor = '#3C3489'}
                         onMouseLeave={e => e.currentTarget.style.backgroundColor = '#534AB7'}
@@ -250,6 +174,8 @@ export default function Dashboard() {
                         </svg>
                     </button>
                 </div>
+
+                {showStart && <StartAssessmentModal onClose={() => setShowStart(false)} />}
 
             </main>
         </div>
