@@ -6,12 +6,18 @@ import ResultPage from './pages/ResultPage'
 import AnalyticsPage from './pages/AnalyticsPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import './index.css'
+import NotFoundPage from './pages/NotFound'
+import InstructionsPage from './pages/InstructionPage'
+import RegisterPage from './pages/RegisterPage'
+import ProfilePage from './pages/ProfilePage'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<LoginPage />} />
+
+        <Route path="/register" element={<RegisterPage />} />
 
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
@@ -25,9 +31,15 @@ export default function App() {
         <Route path="/analytics/:sessionId" element={
           <ProtectedRoute><AnalyticsPage /></ProtectedRoute>
         } />
+        <Route path="/instructions" element={
+          <ProtectedRoute><InstructionsPage /></ProtectedRoute>
+        } />
+        <Route path="/profile" element={
+          <ProfilePage />
+        } />
 
         <Route path="/" element={<Navigate to="/login" replace />} />
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </BrowserRouter>
   )

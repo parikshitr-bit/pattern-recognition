@@ -1,6 +1,7 @@
 CREATE TABLE candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
     name VARCHAR(100) NOT NULL,
     created_at TIMESTAMP DEFAULT NOW()
@@ -20,6 +21,7 @@ CREATE TABLE questions (
 CREATE TABLE assessment_sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidate_id UUID NOT NULL REFERENCES candidates(id),
+    attempt_number INT NOT NULL DEFAULT 1,
     started_at TIMESTAMP DEFAULT NOW(),
     completed_at TIMESTAMP,
     total_time_seconds INT,

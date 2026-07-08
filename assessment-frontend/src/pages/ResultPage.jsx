@@ -1,73 +1,36 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import LogoutModal from '../components/Logoutmodal'
+import { useNavigate, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-
+import { fetchResult } from '../api'
 
 // ─────────────────────────────────────────────
-// Data layer — swap for API call when backend ready
-//
-// STATIC MODE:  reads from router location.state (passed by AssessmentPage)
-// BACKEND MODE: uncomment the fetchResult call below
-//               import { fetchResult } from '../api'
+// Data layer — fetches the result for a session from the backend.
+// GET /api/sessions/{sessionId}/result → ResultResponse
 // ─────────────────────────────────────────────
 function useResultData(sessionId) {
-    const { state } = useLocation()
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
-        // ── STATIC: derive result from AssessmentPage state ──
-        if (state?.questions) {
-            const { questions, answers, timePerQuestion, attemptsPerQuestion, totalTimeSeconds, correct, total } = state
-
-            const responses = questions.map((q, i) => ({
-                questionIndex: i + 1,
-                questionText: q.question_text,
-                questionId: q.id,
-                selectedOptionIndex: answers[q.id] ?? null,
-                correctOptionIndex: q.correct_option_index,
-                selectedOption: answers[q.id] != null ? q.options[answers[q.id]] : null,
-                correctOption: q.options[q.correct_option_index],
-                isCorrect: answers[q.id] === q.correct_option_index,
-                isSkipped: answers[q.id] == null,
-                timeTakenSeconds: timePerQuestion[q.id] || 0,
-                attemptCount: attemptsPerQuestion[q.id] || 0,
-                difficulty: q.difficulty,
-            }))
-
-            const incorrect = responses.filter(r => !r.isCorrect && !r.isSkipped).length
-            const skipped = responses.filter(r => r.isSkipped).length
-            const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0
-            const finalScore = correct * 10
-
-            setData({
-                sessionId,
-                candidateName: (() => { try { return JSON.parse(sessionStorage.getItem('candidate'))?.name || 'Candidate' } catch { return 'Candidate' } })(),
-                totalQuestions: total,
-                correct,
-                incorrect,
-                skipped,
-                accuracy,
-                finalScore,
-                maxScore: total * 10,
-                totalTimeSeconds,
-                responses,
+        let cancelled = false
+        setLoading(true)
+        fetchResult(sessionId)
+            .then(res => {
+                if (cancelled) return
+                const d = res.data
+                setData({
+                    ...d,
+                    // The backend response has no per-row index; add it for display.
+                    responses: (d.responses || []).map((r, i) => ({ ...r, questionIndex: i + 1 })),
+                })
             })
-            setLoading(false)
-            return
-        }
-
-        // ── BACKEND: fetch from API ──
-        // Uncomment below and remove the static block above when backend is ready
-        // fetchResult(sessionId)
-        //   .then(res => { setData(res.data); setLoading(false) })
-        //   .catch(err => { setError(err.message); setLoading(false) })
-
-        setError('No result data found.')
-        setLoading(false)
-    }, [sessionId, state])
+            .catch(err => {
+                if (!cancelled) setError(err.response?.data?.message || 'Result not found.')
+            })
+            .finally(() => { if (!cancelled) setLoading(false) })
+        return () => { cancelled = true }
+    }, [sessionId])
 
     return { data, loading, error }
 }
@@ -122,7 +85,6 @@ function formatTime(s) {
 export default function ResultPage() {
     const { sessionId } = useParams()
     const navigate = useNavigate()
-    const location = useLocation()
     const { data, loading, error } = useResultData(sessionId)
 
     if (loading) return (
@@ -274,7 +236,7 @@ export default function ResultPage() {
                 <div className="flex items-center justify-between">
 
                     <button
-                        onClick={() => navigate(`/analytics/${sessionId}`, { state: location.state })}
+                        onClick={() => navigate(`/analytics/${sessionId}`)}
                         className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
                        text-white transition-all active:scale-[0.98]"
                         style={{ backgroundColor: '#534AB7' }}

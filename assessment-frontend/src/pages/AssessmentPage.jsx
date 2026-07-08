@@ -1,122 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-
-// ─────────────────────────────────────────────
-// STATIC DATA — replace with API call later
-// GET /api/questions → returns array of 10 questions
-// ─────────────────────────────────────────────
-const STATIC_QUESTIONS = [
-    {
-        id: 'q1',
-        type: 'number_sequence',
-        question_text: 'What comes next in the sequence?',
-        pattern_data: { sequence: [2, 4, 8, 16, '?'] },
-        options: ['24', '28', '32', '36'],
-        correct_option_index: 2,
-        difficulty: 'easy',
-    },
-    {
-        id: 'q2',
-        type: 'number_sequence',
-        question_text: 'Identify the missing number.',
-        pattern_data: { sequence: [3, 6, 11, 18, '?'] },
-        options: ['25', '27', '29', '31'],
-        correct_option_index: 1,
-        difficulty: 'medium',
-    },
-    {
-        id: 'q3',
-        type: 'shape_pattern',
-        question_text: 'How many shapes come next?',
-        pattern_data: {
-            sequence: [
-                { shape: '▲', count: 1 },
-                { shape: '▲', count: 2 },
-                { shape: '▲', count: 4 },
-                { shape: '?', count: 0 },
-            ],
-        },
-        options: ['6', '7', '8', '9'],
-        correct_option_index: 2,
-        difficulty: 'easy',
-    },
-    {
-        id: 'q4',
-        type: 'number_sequence',
-        question_text: 'Find the pattern and choose the missing value.',
-        pattern_data: { sequence: [1, 1, 2, 3, 5, 8, '?'] },
-        options: ['11', '12', '13', '14'],
-        correct_option_index: 2,
-        difficulty: 'medium',
-    },
-    {
-        id: 'q5',
-        type: 'number_sequence',
-        question_text: 'What is the next number?',
-        pattern_data: { sequence: [100, 50, 25, '?'] },
-        options: ['10', '12', '12.5', '15'],
-        correct_option_index: 2,
-        difficulty: 'medium',
-    },
-    {
-        id: 'q6',
-        type: 'matrix',
-        question_text: 'Complete the matrix pattern.',
-        pattern_data: {
-            grid: [
-                [1, 2, 3],
-                [4, 5, 6],
-                [7, 8, '?'],
-            ],
-        },
-        options: ['7', '8', '9', '10'],
-        correct_option_index: 2,
-        difficulty: 'easy',
-    },
-    {
-        id: 'q7',
-        type: 'number_sequence',
-        question_text: 'Which number continues the pattern?',
-        pattern_data: { sequence: [5, 10, 20, 40, '?'] },
-        options: ['60', '70', '75', '80'],
-        correct_option_index: 3,
-        difficulty: 'easy',
-    },
-    {
-        id: 'q8',
-        type: 'number_sequence',
-        question_text: 'Spot the rule and find the next term.',
-        pattern_data: { sequence: [144, 121, 100, 81, '?'] },
-        options: ['64', '72', '68', '60'],
-        correct_option_index: 0,
-        difficulty: 'hard',
-    },
-    {
-        id: 'q9',
-        type: 'shape_pattern',
-        question_text: 'How many shapes come next in the sequence?',
-        pattern_data: {
-            sequence: [
-                { shape: '●', count: 1 },
-                { shape: '●', count: 3 },
-                { shape: '●', count: 6 },
-                { shape: '?', count: 0 },
-            ],
-        },
-        options: ['8', '9', '10', '12'],
-        correct_option_index: 2,
-        difficulty: 'medium',
-    },
-    {
-        id: 'q10',
-        type: 'number_sequence',
-        question_text: 'What value replaces the question mark?',
-        pattern_data: { sequence: [7, 14, 28, 56, '?'] },
-        options: ['96', '108', '112', '120'],
-        correct_option_index: 2,
-        difficulty: 'hard',
-    },
-]
+import UnansweredWarningModal from '../components/UnansweredWarningModal'
+import { fetchQuestions, startSession, submitSession } from '../api'
 
 // ─────────────────────────────────────────────
 // Pattern renderers — one per question type
@@ -262,21 +147,56 @@ export default function AssessmentPage() {
     const navigate = useNavigate()
 
     // ── State ──────────────────────────────────
-    const [questions] = useState(STATIC_QUESTIONS)   // later: fetched from API
+    const [questions, setQuestions] = useState([])   // fetched from API
+    const [sessionId, setSessionId] = useState(null)
+    const [loading, setLoading] = useState(true)
+    const [loadError, setLoadError] = useState(null)
     const [currentIndex, setCurrentIndex] = useState(0)
     const [answers, setAnswers] = useState({})     // { questionId: optionIndex }
     const [timePerQuestion, setTimePerQuestion] = useState({}) // { questionId: seconds }
     const [attemptsPerQuestion, setAttemptsPerQuestion] = useState({}) // { questionId: count }
     const [totalSeconds, setTotalSeconds] = useState(0)
     const [submitting, setSubmitting] = useState(false)
+    const [showUnanswered, setShowUnanswered] = useState(false)
 
     const questionTimer = useTimer()
     const totalTimerRef = useRef(null)
     const sessionStartRef = useRef(Date.now())
 
-    const current = questions[currentIndex]
-    const isLast = currentIndex === questions.length - 1
-    const selectedOption = answers[current.id] ?? null
+    const candidateId = (() => {
+        try { return JSON.parse(sessionStorage.getItem('candidate'))?.id } catch { return null }
+    })()
+
+    // ── Start a session + load its questions on mount ──
+    useEffect(() => {
+        let cancelled = false
+        if (!candidateId) { navigate('/login'); return }
+        ;(async () => {
+            try {
+                const startRes = await startSession(candidateId)
+                if (cancelled) return
+                setSessionId(startRes.data.sessionId)
+
+                const qRes = await fetchQuestions(candidateId)
+                if (cancelled) return
+                const mapped = (qRes.data || []).map(q => ({
+                    id: q.id,
+                    type: q.questionType,
+                    question_text: q.questionText,
+                    pattern_data: q.patternData,
+                    options: q.options,
+                    difficulty: q.difficulty,
+                }))
+                setQuestions(mapped)
+                sessionStartRef.current = Date.now()
+            } catch (err) {
+                if (!cancelled) setLoadError(err.response?.data?.message || 'Could not start the assessment.')
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [candidateId])
 
     // ── Total timer ────────────────────────────
     useEffect(() => {
@@ -287,10 +207,48 @@ export default function AssessmentPage() {
     // ── Per-question timer: restart on question change ──
     useEffect(() => {
         questionTimer.start()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [currentIndex])
 
-    // ── Select an answer ───────────────────────
+    // ── Loading / error / empty guards (after all hooks) ──
+    if (loading) return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f7f7f8' }}>
+            <div className="flex flex-col items-center gap-3">
+                <span className="w-8 h-8 rounded-full border-2 border-purple-200 animate-spin"
+                    style={{ borderTopColor: '#534AB7' }} />
+                <p className="text-sm text-gray-400">Preparing your assessment…</p>
+            </div>
+        </div>
+    )
+
+    if (loadError) return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f7f7f8' }}>
+            <div className="text-center flex flex-col gap-3 max-w-sm px-6">
+                <p className="text-sm text-gray-600">{loadError}</p>
+                <button onClick={() => navigate('/dashboard')}
+                    className="text-sm font-medium" style={{ color: '#534AB7' }}>
+                    Back to dashboard
+                </button>
+            </div>
+        </div>
+    )
+
+    if (!questions.length) return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f7f7f8' }}>
+            <div className="text-center flex flex-col gap-3">
+                <p className="text-sm text-gray-600">No questions are available right now.</p>
+                <button onClick={() => navigate('/dashboard')}
+                    className="text-sm font-medium" style={{ color: '#534AB7' }}>
+                    Back to dashboard
+                </button>
+            </div>
+        </div>
+    )
+
+    const current = questions[currentIndex]
+    const isLast = currentIndex === questions.length - 1
+    const selectedOption = answers[current.id] ?? null
+
+    // ── Select an answer 
     const handleSelect = (optionIndex) => {
         const alreadyAnswered = answers[current.id] !== undefined
         setAnswers(prev => ({ ...prev, [current.id]: optionIndex }))
@@ -300,7 +258,7 @@ export default function AssessmentPage() {
         }))
     }
 
-    // ── Navigate between questions ─────────────
+    // ── Navigate between questions 
     const saveCurrentTime = () => {
         const elapsed = questionTimer.stop()
         setTimePerQuestion(prev => ({
@@ -319,20 +277,14 @@ export default function AssessmentPage() {
         setCurrentIndex(i => i - 1)
     }
 
-    // ── Submit ─────────────────────────────────
-    // When backend is ready:
-    // 1. Call POST /api/sessions/start first (on page load) to get sessionId
-    // 2. Build payload and POST /api/sessions/{sessionId}/submit
-    // 3. Navigate to /results/{sessionId}
     const handleSubmit = async () => {
         saveCurrentTime()
         setSubmitting(true)
 
         const totalTime = Math.floor((Date.now() - sessionStartRef.current) / 1000)
 
-        // Payload shaped exactly as the backend will expect
         const payload = {
-            candidateId: (() => { try { return JSON.parse(sessionStorage.getItem('candidate'))?.id } catch { return null } })(),
+            candidateId,
             totalTimeSeconds: totalTime,
             responses: questions.map(q => ({
                 questionId: q.id,
@@ -342,24 +294,14 @@ export default function AssessmentPage() {
             })),
         }
 
-        // Static mode: calculate result locally and pass via router state
-        // Later: POST to API, navigate to /results/{sessionId} from response
-        const correct = questions.filter(
-            q => answers[q.id] === q.correct_option_index
-        ).length
-
-        navigate('/results/mock-session', {
-            state: {
-                payload,
-                questions,
-                answers,
-                timePerQuestion,
-                attemptsPerQuestion,
-                totalTimeSeconds: totalTime,
-                correct,
-                total: questions.length,
-            },
-        })
+        try {
+            await submitSession(sessionId, payload)
+            // Results and analytics are fetched from the backend by session id.
+            navigate(`/results/${sessionId}`)
+        } catch (err) {
+            setSubmitting(false)
+            setLoadError(err.response?.data?.message || 'Failed to submit your assessment. Please try again.')
+        }
     }
 
     // ── Progress ───────────────────────────────
@@ -534,7 +476,14 @@ export default function AssessmentPage() {
                         {/* Next / Submit */}
                         {isLast ? (
                             <button
-                                onClick={handleSubmit}
+                                onClick={() => {
+                                    const unanswered = questions.filter(q => answers[q.id] === undefined).length
+                                    if (unanswered > 0) {
+                                        setShowUnanswered(true)
+                                    } else {
+                                        handleSubmit()           // all answered, submit directly
+                                    }
+                                }}
                                 disabled={submitting}
                                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
                            text-white transition-all active:scale-[0.98] disabled:opacity-70"
@@ -575,6 +524,13 @@ export default function AssessmentPage() {
 
                 </div>
             </main>
+            {showUnanswered && (
+                <UnansweredWarningModal
+                    unansweredCount={questions.filter(q => answers[q.id] === undefined).length}
+                    onConfirm={() => { setShowUnanswered(false); handleSubmit() }}
+                    onClose={() => setShowUnanswered(false)}
+                />
+            )}
         </div>
     )
 }

@@ -1,88 +1,49 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
     BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-    LineChart, Line, CartesianGrid, Legend,
+    LineChart, Line, CartesianGrid,
 } from 'recharts'
 import Navbar from '../components/Navbar'
+import { fetchAnalytics } from '../api'
 
 // ─────────────────────────────────────────────
-// Data layer
-//
-// STATIC MODE:  derives analytics from router location.state
-// BACKEND MODE: uncomment fetchAnalytics call below
-//               import { fetchAnalytics } from '../api'
+// Data layer — fetches analytics for a session from the backend.
+// GET /api/sessions/{sessionId}/analytics → AnalyticsResponse
 // ─────────────────────────────────────────────
 function useAnalyticsData(sessionId) {
-    const { state } = useLocation()
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
 
     useEffect(() => {
-        // ── STATIC: build analytics from AssessmentPage state ──
-        if (state?.questions) {
-            const { questions, answers, timePerQuestion, attemptsPerQuestion, totalTimeSeconds } = state
-
-            const perQuestion = questions.map((q, i) => {
-                const isCorrect = answers[q.id] === q.correct_option_index
-                const isSkipped = answers[q.id] == null
-                return {
-                    label: `Q${i + 1}`,
-                    questionText: q.question_text,
-                    difficulty: q.difficulty,
-                    timeTaken: timePerQuestion[q.id] || 0,
-                    attempts: attemptsPerQuestion[q.id] || 0,
-                    correct: !isSkipped && isCorrect ? 1 : 0,
-                    incorrect: !isSkipped && !isCorrect ? 1 : 0,
-                    skipped: isSkipped ? 1 : 0,
-                    status: isSkipped ? 'skipped' : isCorrect ? 'correct' : 'incorrect',
-                }
+        let cancelled = false
+        setLoading(true)
+        fetchAnalytics(sessionId)
+            .then(res => {
+                if (cancelled) return
+                const d = res.data
+                const perQuestion = d.perQuestion || []
+                const timed = perQuestion.filter(q => q.timeTaken > 0)
+                setData({
+                    ...d,
+                    avgTime: d.avgTimePerQuestion,           // backend field → UI field
+                    perQuestion,
+                    difficultyBreakdown: d.difficultyBreakdown || [],
+                    slowest: perQuestion.length
+                        ? [...perQuestion].sort((a, b) => b.timeTaken - a.timeTaken)[0]
+                        : null,
+                    fastest: timed.length
+                        ? [...timed].sort((a, b) => a.timeTaken - b.timeTaken)[0]
+                        : null,
+                })
             })
-
-            const correct = perQuestion.filter(q => q.status === 'correct').length
-            const incorrect = perQuestion.filter(q => q.status === 'incorrect').length
-            const skipped = perQuestion.filter(q => q.status === 'skipped').length
-            const accuracy = Math.round((correct / questions.length) * 100)
-            const avgTime = Math.round(perQuestion.reduce((s, q) => s + q.timeTaken, 0) / questions.length)
-            const slowest = [...perQuestion].sort((a, b) => b.timeTaken - a.timeTaken)[0]
-            const fastest = [...perQuestion].filter(q => q.timeTaken > 0).sort((a, b) => a.timeTaken - b.timeTaken)[0]
-            const totalAttempts = perQuestion.reduce((s, q) => s + q.attempts, 0)
-
-            const difficultyBreakdown = ['easy', 'medium', 'hard'].map(diff => {
-                const qs = perQuestion.filter(q => q.difficulty === diff)
-                const c = qs.filter(q => q.status === 'correct').length
-                return {
-                    difficulty: diff,
-                    total: qs.length,
-                    correct: c,
-                    accuracy: qs.length > 0 ? Math.round((c / qs.length) * 100) : 0,
-                }
-            }).filter(d => d.total > 0)
-
-            setData({
-                sessionId,
-                totalTimeSeconds,
-                correct, incorrect, skipped,
-                accuracy, avgTime,
-                totalAttempts,
-                slowest, fastest,
-                perQuestion,
-                difficultyBreakdown,
+            .catch(err => {
+                if (!cancelled) setError(err.response?.data?.message || 'Analytics not found.')
             })
-            setLoading(false)
-            return
-        }
-
-        // ── BACKEND: fetch from API ──
-        // Uncomment below and remove static block above when backend is ready
-        // fetchAnalytics(sessionId)
-        //   .then(res => { setData(res.data); setLoading(false) })
-        //   .catch(err => { setError(err.message); setLoading(false) })
-
-        setError('No analytics data found.')
-        setLoading(false)
-    }, [sessionId, state])
+            .finally(() => { if (!cancelled) setLoading(false) })
+        return () => { cancelled = true }
+    }, [sessionId])
 
     return { data, loading, error }
 }
@@ -141,7 +102,6 @@ function StatCard({ label, value, sub, color }) {
 export default function AnalyticsPage() {
     const { sessionId } = useParams()
     const navigate = useNavigate()
-    const location = useLocation()
     const { data, loading, error } = useAnalyticsData(sessionId)
 
     if (loading) return (

@@ -14,11 +14,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Global error handling
+// Global error handling.
+// A 401 from a protected route means the JWT is missing/expired → force re-login.
+// But 401s from the auth endpoints themselves (bad login credentials, wrong current
+// password) are expected validation errors — let the page handle/display them.
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const isAuthEndpoint =
+      AUTH_ENDPOINTS.some((p) => url.includes(p)) || url.endsWith('/password')
+    if (error.response?.status === 401 && !isAuthEndpoint) {
       sessionStorage.clear()
       window.location.href = '/login'
     }

@@ -1,10 +1,13 @@
 import { useNavigate } from 'react-router-dom'
+import { useToast } from '../context/ToastContext'
 
 export default function LogoutModal({ onClose }) {
     const navigate = useNavigate()
+    const toast = useToast()
 
     const handleLogout = () => {
         sessionStorage.clear()
+        toast.success("You've been signed out")
         navigate('/login')
     }
 

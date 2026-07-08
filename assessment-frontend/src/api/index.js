@@ -1,14 +1,23 @@
 import api from './axiosInstance'
 
-// Auth
+// ── Auth ──────────────────────────────────────────────
 export const loginCandidate = (username, password) =>
   api.post('/auth/login', { username, password })
 
-// Questions
-export const fetchQuestions = () =>
-  api.get('/questions')
+export const registerCandidate = (payload) =>
+  api.post('/auth/register', payload) // { name, email, username, password }
 
-// Sessions
+export const updateProfile = (candidateId, payload) =>
+  api.put(`/candidates/${candidateId}`, payload) // { name, email }
+
+export const updatePassword = (candidateId, payload) =>
+  api.put(`/candidates/${candidateId}/password`, payload) // { currentPassword, newPassword }
+
+// ── Questions ─────────────────────────────────────────
+export const fetchQuestions = (candidateId) =>
+  api.get('/questions', { params: { candidateId } })
+
+// ── Sessions ──────────────────────────────────────────
 export const startSession = (candidateId) =>
   api.post('/sessions/start', { candidateId })
 
@@ -20,3 +29,6 @@ export const fetchResult = (sessionId) =>
 
 export const fetchAnalytics = (sessionId) =>
   api.get(`/sessions/${sessionId}/analytics`)
+
+export const fetchHistory = (candidateId) =>
+  api.get('/sessions', { params: { candidateId } })
