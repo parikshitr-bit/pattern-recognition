@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import LogoutModal from './LogoutModal'
+import LogoutModal from './Logoutmodal'
 
 export default function Navbar({ showBack = false }) {
   const navigate = useNavigate()

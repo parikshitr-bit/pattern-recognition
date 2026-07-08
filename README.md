@@ -4,7 +4,7 @@ A full-stack web app for running timed **pattern-recognition assessments**. Cand
 register/log in, take an assessment of randomized questions (number sequences, shape
 patterns, and matrices), and get a scored result plus detailed performance analytics.
 
-- **Backend:** Spring Boot 4.1 (Java 21) · Spring Data JPA · PostgreSQL · JWT auth · BCrypt
+- **Backend:** Spring Boot 4.1 (Java 21) · Spring Data JPA · PostgreSQL · JWT auth 
 - **Frontend:** React + Vite · Tailwind CSS · React Router · Recharts · Axios
 
 ---
@@ -182,7 +182,6 @@ All routes are under `/api`. Every route **except** `POST /auth/login` and
   ~12 easy / 16 medium / 12 hard, across number-sequence, shape-pattern, and matrix types).
 - Maximum **3 attempts** per candidate.
 - Scoring: **10 points per correct answer** (max 100); accuracy = correct / total.
-- Correct answers are never sent to the client — grading happens server-side on submit.
 
 ## Running on the Cognizant corporate network
 
@@ -204,13 +203,3 @@ gradle bootRun          # use your local gradle, not the wrapper
 
 On an unrestricted network, plain `./gradlew bootRun` works without any of the above.
 
-## Notes & known issues
-
-- **Schema is managed by SQL** (`ddl-auto=none`). If you change an entity, update
-  `database/create_tables.sql` and apply the change to your database — Hibernate won't
-  auto-migrate.
-- **Passwords** — seeded/plaintext passwords are migrated to BCrypt on first startup;
-  the migration is idempotent (skips values already in `$2...` format).
-- `components/Navbar.jsx` imports `./LogoutModal` while the file is `Logoutmodal.jsx`.
-  This works on Windows/macOS (case-insensitive filesystems) but would break a
-  case-sensitive Linux/CI build — rename for consistency if you deploy there.
