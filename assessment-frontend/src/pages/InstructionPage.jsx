@@ -1,7 +1,11 @@
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import StartAssessmentModal from '../components/StartAssessmentModal'
+import { fetchHistory } from '../api'
+
+// Maximum number of assessment attempts allowed per candidate.
+const ATTEMPT_LIMIT = 3
 
 const INSTRUCTIONS = [
     {
@@ -54,6 +58,20 @@ const WARNINGS = [
 export default function InstructionsPage() {
     const navigate = useNavigate()
     const [showStart, setShowStart] = useState(false)
+    const [attempts, setAttempts] = useState(0)
+
+    const candidate = (() => {
+        try { return JSON.parse(sessionStorage.getItem('candidate')) } catch { return null }
+    })()
+
+    useEffect(() => {
+        if (!candidate?.id) return
+        fetchHistory(candidate.id)
+            .then(res => setAttempts(Array.isArray(res.data) ? res.data.length : 0))
+            .catch(() => setAttempts(0))
+    }, [candidate?.id])
+
+    const limitReached = attempts >= ATTEMPT_LIMIT
 
     return (
         <div className="min-h-screen flex flex-col" style={{ backgroundColor: '#f7f7f8' }}>
@@ -151,10 +169,14 @@ export default function InstructionsPage() {
                         border border-gray-100 px-6 py-5">
                     <div className="flex flex-col gap-0.5">
                         <p className="text-sm font-medium text-gray-800">
-                            Ready to test your pattern recognition?
+                            {limitReached
+                                ? "You've reached the attempt limit"
+                                : 'Ready to test your pattern recognition?'}
                         </p>
                         <p className="text-xs text-gray-400">
-                            Your time starts as soon as you click begin.
+                            {limitReached
+                                ? `All ${ATTEMPT_LIMIT} attempts have been used.`
+                                : 'Your time starts as soon as you click begin.'}
                         </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -163,21 +185,36 @@ export default function InstructionsPage() {
                             className="text-sm text-gray-400 hover:text-gray-600 transition-colors">
                             Go back
                         </button>
-                        <button
-                            onClick={() => setShowStart(true)}
-                            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
-                         text-white transition-all active:scale-[0.98]"
-                            style={{ backgroundColor: '#534AB7' }}
-                            onMouseEnter={e => e.currentTarget.style.backgroundColor = '#3C3489'}
-                            onMouseLeave={e => e.currentTarget.style.backgroundColor = '#534AB7'}
-                        >
-                            Begin assessment
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                                stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <line x1="5" y1="12" x2="19" y2="12" />
-                                <polyline points="12 5 19 12 12 19" />
-                            </svg>
-                        </button>
+                        <div className="relative group inline-flex">
+                            <button
+                                onClick={() => { if (!limitReached) setShowStart(true) }}
+                                disabled={limitReached}
+                                aria-disabled={limitReached}
+                                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium
+                             text-white transition-all ${limitReached ? 'cursor-not-allowed opacity-60' : 'active:scale-[0.98]'}`}
+                                style={{ backgroundColor: '#534AB7' }}
+                                onMouseEnter={e => { if (!limitReached) e.currentTarget.style.backgroundColor = '#3C3489' }}
+                                onMouseLeave={e => { if (!limitReached) e.currentTarget.style.backgroundColor = '#534AB7' }}
+                            >
+                                Begin assessment
+                                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                                    stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <line x1="5" y1="12" x2="19" y2="12" />
+                                    <polyline points="12 5 19 12 12 19" />
+                                </svg>
+                            </button>
+                            {limitReached && (
+                                <span
+                                    className="absolute left-1/2 -translate-x-1/2 top-full mt-2 whitespace-nowrap
+                                               rounded-lg px-3 py-1.5 text-xs opacity-0 group-hover:opacity-100
+                                               transition-opacity pointer-events-none z-10 shadow-lg"
+                                    style={{ backgroundColor: '#0F0D2E', color: '#EEEDFE' }}
+                                    role="tooltip"
+                                >
+                                    Attempt limit reached ({ATTEMPT_LIMIT}/{ATTEMPT_LIMIT})
+                                </span>
+                            )}
+                        </div>
                     </div>
                 </div>
                 {showStart && <StartAssessmentModal onClose={() => setShowStart(false)} />}

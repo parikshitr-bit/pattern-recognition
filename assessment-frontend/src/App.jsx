@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import LoginPage from './pages/LoginPage'
 import Dashboard from './pages/Dashboard'
+import HistoryPage from './pages/HistoryPage'
 import AssessmentPage from './pages/AssessmentPage'
 import ResultPage from './pages/ResultPage'
 import AnalyticsPage from './pages/AnalyticsPage'
@@ -21,6 +22,9 @@ export default function App() {
 
         <Route path="/dashboard" element={
           <ProtectedRoute><Dashboard /></ProtectedRoute>
+        } />
+        <Route path="/history" element={
+          <ProtectedRoute><HistoryPage /></ProtectedRoute>
         } />
         <Route path="/assessment" element={
           <ProtectedRoute><AssessmentPage /></ProtectedRoute>

@@ -1,9 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import LogoutModal from './Logoutmodal'
+
+const NAV_LINKS = [
+  { label: 'Dashboard', path: '/dashboard' },
+  { label: 'History', path: '/history' },
+]
 
 export default function Navbar({ showBack = false }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [showLogout, setShowLogout] = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
   const dropdownRef = useRef(null)
@@ -54,6 +60,7 @@ export default function Navbar({ showBack = false }) {
           </div>
           <span className="text-sm font-medium" style={{ color: '#EEEDFE' }}>PatternIQ</span>
         </div>
+        
 
         {/* Right side */}
         <div className="flex items-center gap-4">
@@ -131,6 +138,19 @@ export default function Navbar({ showBack = false }) {
                       <rect x="14" y="14" width="7" height="7" />
                     </svg>
                     Dashboard
+                  </button>
+
+                  <button
+                    onClick={() => { setShowDropdown(false); navigate('/history') }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm
+                               text-gray-600 hover:bg-gray-50 transition-colors text-left"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    History
                   </button>
 
                   <button
