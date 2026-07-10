@@ -48,11 +48,15 @@ public class QuestionService {
     private QuestionDto toDto(Question q) {
         return new QuestionDto(
                 q.getId(),
-                q.getQuestionText(),
+                q.getSection(),
                 q.getQuestionType(),
+                q.getQuestionText(),
+                q.getPrompt(),
                 q.getPatternData(),
                 q.getOptions(),
-                q.getDifficulty()
+                q.getItems(),
+                q.getZones(),
+                q.getSuffix()
         );
     }
 }

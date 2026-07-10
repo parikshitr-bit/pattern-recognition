@@ -10,10 +10,11 @@ import java.util.UUID;
 
 public interface QuestionRepository extends JpaRepository<Question, UUID> {
 
-    // Fetch 10 random from unseen questions (only excludes COMPLETED sessions)
+    // Section 1 (MCQ): 10 random unseen pattern questions for a candidate.
     @Query(value = """
         SELECT * FROM questions
-        WHERE id NOT IN (
+        WHERE section = 'pattern'
+        AND id NOT IN (
             SELECT DISTINCT r.question_id
             FROM responses r
             JOIN assessment_sessions s ON r.session_id = s.id
@@ -25,20 +26,13 @@ public interface QuestionRepository extends JpaRepository<Question, UUID> {
         """, nativeQuery = true)
     List<Question> findUnseenQuestions(@Param("candidateId") UUID candidateId);
 
-    @Query(value = "SELECT * FROM questions ORDER BY RANDOM() LIMIT 10",
+    // Fallback for section 1 when not enough unseen pattern questions remain.
+    @Query(value = "SELECT * FROM questions WHERE section = 'pattern' ORDER BY RANDOM() LIMIT 10",
            nativeQuery = true)
     List<Question> findTenRandom();
 
-    // Count how many unseen questions remain for a candidate
-    @Query(value = """
-        SELECT COUNT(*) FROM questions
-        WHERE id NOT IN (
-            SELECT DISTINCT r.question_id
-            FROM responses r
-            JOIN assessment_sessions s ON r.session_id = s.id
-            WHERE s.candidate_id = :candidateId
-            AND s.status = 'COMPLETED'
-        )
-        """, nativeQuery = true)
-    int countUnseenQuestions(@Param("candidateId") UUID candidateId);
+    // Section 2 (drag activities): the fixed set, in a stable order.
+    @Query(value = "SELECT * FROM questions WHERE section = 'drag' ORDER BY created_at, id",
+           nativeQuery = true)
+    List<Question> findActivities();
 }

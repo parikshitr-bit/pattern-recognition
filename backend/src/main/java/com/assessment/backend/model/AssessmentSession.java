@@ -38,6 +38,9 @@ public class AssessmentSession {
     @Column(name = "final_score")
     private Integer finalScore;
 
+    @Column(name = "max_score")
+    private Integer maxScore;
+
     @Column(name = "accuracy_percentage")
     private Double accuracyPercentage;
 

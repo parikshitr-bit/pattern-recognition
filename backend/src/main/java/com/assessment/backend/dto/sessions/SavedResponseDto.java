@@ -9,7 +9,9 @@ import java.util.UUID;
 @AllArgsConstructor
 public class SavedResponseDto {
     private UUID questionId;
-    private Integer selectedOptionIndex; // null if not answered yet
+    private Integer selectedOptionIndex; // MCQ; null if not answered
+    private Object answer;               // activity answer (mapping/order); null for MCQ
+    private Integer dragAttempts;
     private Integer timeTakenSeconds;
     private Integer attemptCount;
 }
