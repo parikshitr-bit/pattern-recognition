@@ -55,8 +55,8 @@ export default function StartAssessmentModal({ onClose }) {
                         </div>
                         <ul className="flex flex-col gap-2 list-none">
                             {[
-                                'Assessment cannot be paused once started',
-                                'Ensure a stable internet connection',
+                                'The timer runs across both sections and does not pause',
+                                'You can close and resume, but the clock keeps running',
                                 'Find a quiet, distraction-free space',
                             ].map((note) => (
                                 <li key={note} className="flex items-start gap-2">
@@ -72,7 +72,7 @@ export default function StartAssessmentModal({ onClose }) {
 
                     {/* Stats row */}
                     <div className="flex justify-between px-1">
-                        {[['10', 'questions'], ['~20m', 'duration'], ['100', 'max score']].map(([val, lbl]) => (
+                        {[['15', 'questions'], ['2', 'sections'], ['~20m', 'duration']].map(([val, lbl]) => (
                             <div key={lbl} className="flex flex-col items-center gap-0.5">
                                 <span className="text-base font-medium font-mono" style={{ color: '#26215C' }}>{val}</span>
                                 <span className="text-xs text-gray-400">{lbl}</span>

@@ -6,41 +6,47 @@ import StartAssessmentModal from '../components/StartAssessmentModal'
 const INSTRUCTIONS = [
     {
         step: '01',
-        title: 'Read each pattern carefully',
-        desc: 'Each question presents a sequence or pattern. Take a moment to study it before answering.',
+        title: 'Two sections, one sitting',
+        desc: 'Section 1 has pattern questions (sequences, shapes, matrices). Section 2 has interactive drag-and-drop activities. You move through all 15 items in one attempt.',
     },
     {
         step: '02',
-        title: 'Select your answer',
-        desc: 'Choose the option that best completes or continues the pattern. Only one answer is correct.',
+        title: 'Answer pattern questions',
+        desc: 'For each pattern, pick the option that completes it. Only one option is correct.',
     },
     {
         step: '03',
-        title: 'Watch the timer',
-        desc: 'Time taken per question is recorded as part of your behavioral metrics. Stay focused.',
+        title: 'Complete the drag activities',
+        desc: 'Sort items into groups, match pairs, order sequences, and fill in the blanks by dragging. You get credit for every item you place correctly.',
     },
     {
         step: '04',
+        title: 'Navigate freely & mark for review',
+        desc: 'Jump to any question from the palette and flag ones to revisit. One timer runs across the whole assessment — it keeps ticking even if you leave, and you can resume where you left off.',
+    },
+    {
+        step: '05',
         title: 'Submit to see results',
-        desc: 'After the last question, your score, accuracy, and detailed analytics will be generated.',
+        desc: 'On submit, your score and per-section analytics are generated. You can review any past attempt from the dashboard.',
     },
 ]
 
 const SCORING = [
-    { label: 'Correct answer', points: '+10 pts', color: '#1D9E75', bg: '#E1F5EE' },
-    { label: 'Wrong answer', points: '0 pts', color: '#A32D2D', bg: '#FFF0F0' },
-    { label: 'Time bonus', points: 'up to +5 pts', color: '#534AB7', bg: '#EEEDFE' },
+    { label: 'Each correct item', points: '+1 pt', color: '#1D9E75', bg: '#E1F5EE' },
+    { label: 'Activities give partial credit', points: 'per item', color: '#534AB7', bg: '#EEEDFE' },
+    { label: 'Wrong or unanswered', points: '0 pts', color: '#A32D2D', bg: '#FFF0F0' },
 ]
 
 const STATS = [
-    { value: '10', label: 'Questions' },
+    { value: '2', label: 'Sections' },
+    { value: '15', label: 'Questions' },
     { value: '20m', label: 'Duration' },
-    { value: '100', label: 'Max score' },
-    { value: '1x', label: 'Attempt' },
+    { value: '3', label: 'Attempts' },
 ]
 
 const WARNINGS = [
-    'Assessment cannot be paused once started',
+    'The timer runs across both sections and does not pause',
+    'You can close and resume, but the clock keeps running',
     'Ensure a stable internet connection',
     'Find a quiet, distraction-free space',
 ]
