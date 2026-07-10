@@ -123,7 +123,7 @@ export default function ResultPage() {
                         Assessment complete
                     </p>
                     <h1 className="text-2xl font-medium text-gray-900">Your results</h1>
-                    <p className="text-sm text-gray-500">Here's how you performed across all 10 questions.</p>
+                    <p className="text-sm text-gray-500">Here's how you performed across all {data.totalQuestions} items, by section.</p>
                 </div>
 
                 {/* Hero result card */}
@@ -160,77 +160,93 @@ export default function ResultPage() {
                     </div>
                 </div>
 
-                {/* Per-question breakdown */}
-                <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-                    <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
-                        <h2 className="text-sm font-medium text-gray-700">Question breakdown</h2>
-                        <span className="text-xs text-gray-400">{data.totalQuestions} questions</span>
-                    </div>
-
-                    <div className="divide-y divide-gray-50">
-                        {data.responses.map((r) => (
-                            <div key={r.questionId}
-                                className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50 transition-colors">
-
-                                {/* Status icon */}
-                                <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                                    style={{
-                                        backgroundColor: r.isSkipped ? '#f3f4f6' : r.isCorrect ? '#E1F5EE' : '#FFF0F0',
-                                    }}>
-                                    {r.isSkipped ? (
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round">
-                                            <line x1="5" y1="12" x2="19" y2="12" />
-                                        </svg>
-                                    ) : r.isCorrect ? (
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="#1D9E75" strokeWidth="2.5" strokeLinecap="round">
-                                            <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                    ) : (
-                                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none"
-                                            stroke="#A32D2D" strokeWidth="2.5" strokeLinecap="round">
-                                            <line x1="18" y1="6" x2="6" y2="18" />
-                                            <line x1="6" y1="6" x2="18" y2="18" />
-                                        </svg>
-                                    )}
-                                </div>
-
-                                {/* Question info */}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm text-gray-700 truncate">
-                                        <span className="text-gray-400 mr-2 font-mono text-xs">Q{r.questionIndex}</span>
-                                        {r.questionText}
-                                    </p>
-                                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                        {r.isSkipped ? (
-                                            <span className="text-xs text-gray-400">Skipped</span>
-                                        ) : (
-                                            <>
-                                                <span className="text-xs" style={{ color: r.isCorrect ? '#1D9E75' : '#A32D2D' }}>
-                                                    Your answer: <span className="font-medium font-mono">{r.selectedOption}</span>
-                                                </span>
-                                                {!r.isCorrect && (
-                                                    <span className="text-xs text-gray-400">
-                                                        Correct: <span className="font-medium font-mono text-gray-600">{r.correctOption}</span>
-                                                    </span>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Meta */}
-                                <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                    <span className="text-xs font-mono text-gray-400">{formatTime(r.timeTakenSeconds)}</span>
-                                    <span className="text-xs text-gray-300">
-                                        {r.attemptCount} attempt{r.attemptCount !== 1 ? 's' : ''}
-                                    </span>
-                                </div>
+                {/* Per-section breakdown */}
+                {['pattern', 'drag'].map((sec) => {
+                    const rows = data.responses.filter((r) => r.section === sec)
+                    if (!rows.length) return null
+                    const secCorrect = rows.reduce((s, r) => s + (r.correctCount || 0), 0)
+                    const secTotal = rows.reduce((s, r) => s + (r.totalCount || 0), 0)
+                    return (
+                        <div key={sec} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-gray-50 flex items-center justify-between">
+                                <h2 className="text-sm font-medium text-gray-700">
+                                    {sec === 'pattern' ? 'Section 1 · Pattern' : 'Section 2 · Interactive'}
+                                </h2>
+                                <span className="text-xs text-gray-400">{secCorrect}/{secTotal} correct</span>
                             </div>
-                        ))}
-                    </div>
-                </div>
+
+                            <div className="divide-y divide-gray-50">
+                                {rows.map((r) => {
+                                    const status = r.isSkipped ? 'skipped'
+                                        : r.correctCount === r.totalCount ? 'correct'
+                                            : r.correctCount > 0 ? 'partial' : 'incorrect'
+                                    const sc = {
+                                        correct: { color: '#1D9E75', bg: '#E1F5EE' },
+                                        partial: { color: '#7A4F00', bg: '#FFF7E0' },
+                                        incorrect: { color: '#A32D2D', bg: '#FFF0F0' },
+                                        skipped: { color: '#9ca3af', bg: '#f3f4f6' },
+                                    }[status]
+                                    return (
+                                        <div key={r.questionId}
+                                            className="px-6 py-4 flex items-start gap-4 hover:bg-gray-50 transition-colors">
+                                            <div className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
+                                                style={{ backgroundColor: sc.bg }}>
+                                                {status === 'skipped' ? (
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={sc.color} strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                                                ) : status === 'incorrect' ? (
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={sc.color} strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                                                ) : (
+                                                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={sc.color} strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                                )}
+                                            </div>
+
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm text-gray-700 truncate">
+                                                    <span className="text-gray-400 mr-2 font-mono text-xs">Q{r.questionIndex}</span>
+                                                    {r.questionText}
+                                                </p>
+                                                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                                    {sec === 'pattern' ? (
+                                                        r.isSkipped ? (
+                                                            <span className="text-xs text-gray-400">Skipped</span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-xs" style={{ color: r.isCorrect ? '#1D9E75' : '#A32D2D' }}>
+                                                                    Your answer: <span className="font-medium font-mono">{r.selectedOption}</span>
+                                                                </span>
+                                                                {!r.isCorrect && (
+                                                                    <span className="text-xs text-gray-400">
+                                                                        Correct: <span className="font-medium font-mono text-gray-600">{r.correctOption}</span>
+                                                                    </span>
+                                                                )}
+                                                            </>
+                                                        )
+                                                    ) : (
+                                                        <>
+                                                            <span className="text-xs" style={{ color: sc.color }}>
+                                                                {r.correctCount}/{r.totalCount} placed correctly
+                                                            </span>
+                                                            {r.incorrectPlacements > 0 && (
+                                                                <span className="text-xs text-gray-400">{r.incorrectPlacements} misplacement{r.incorrectPlacements !== 1 ? 's' : ''}</span>
+                                                            )}
+                                                            {r.dragAttempts > 0 && (
+                                                                <span className="text-xs text-gray-300">{r.dragAttempts} drag{r.dragAttempts !== 1 ? 's' : ''}</span>
+                                                            )}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                                <span className="text-xs font-mono text-gray-400">{formatTime(r.timeTakenSeconds || 0)}</span>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )
+                })}
 
                 {/* Actions */}
                 <div className="flex items-center justify-between">

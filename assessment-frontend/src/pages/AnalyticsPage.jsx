@@ -29,7 +29,7 @@ function useAnalyticsData(sessionId) {
                     ...d,
                     avgTime: d.avgTimePerQuestion,           // backend field → UI field
                     perQuestion,
-                    difficultyBreakdown: d.difficultyBreakdown || [],
+                    sectionBreakdown: d.sectionBreakdown || [],
                     slowest: perQuestion.length
                         ? [...perQuestion].sort((a, b) => b.timeTaken - a.timeTaken)[0]
                         : null,
@@ -57,15 +57,15 @@ function formatTime(s) {
 }
 
 const STATUS_COLOR = {
-    correct: { bar: '#1D9E75', text: '#0F6E56', bg: '#E1F5EE' },
-    incorrect: { bar: '#EF4444', text: '#A32D2D', bg: '#FFF0F0' },
-    skipped: { bar: '#d1d5db', text: '#6b7280', bg: '#f3f4f6' },
+    correct: { text: '#0F6E56', bg: '#E1F5EE' },
+    partial: { text: '#7A4F00', bg: '#FFF7E0' },
+    incorrect: { text: '#A32D2D', bg: '#FFF0F0' },
+    skipped: { text: '#6b7280', bg: '#f3f4f6' },
 }
 
-const DIFF_COLOR = {
-    easy: '#1D9E75',
-    medium: '#F59E0B',
-    hard: '#EF4444',
+const SECTION_META = {
+    pattern: { label: 'Pattern', color: '#534AB7' },
+    drag: { label: 'Interactive', color: '#1D9E75' },
 }
 
 // ─────────────────────────────────────────────
@@ -208,8 +208,8 @@ export default function AnalyticsPage() {
                     </div>
                 </div>
 
-                {/* Difficulty breakdown */}
-                {data.difficultyBreakdown.length > 0 && (
+                {/* Accuracy by section */}
+                {data.sectionBreakdown.length > 0 && (
                     <div className="bg-white rounded-2xl border border-gray-100 p-6 flex flex-col gap-5">
                         <div className="flex items-center gap-2">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
@@ -218,23 +218,26 @@ export default function AnalyticsPage() {
                                 <path d="M2 17l10 5 10-5" />
                                 <path d="M2 12l10 5 10-5" />
                             </svg>
-                            <h2 className="text-sm font-medium text-gray-700">Accuracy by difficulty</h2>
+                            <h2 className="text-sm font-medium text-gray-700">Accuracy by section</h2>
                         </div>
                         <div className="flex flex-col gap-3">
-                            {data.difficultyBreakdown.map(({ difficulty, total, correct, accuracy }) => (
-                                <div key={difficulty} className="flex items-center gap-4">
-                                    <span className="text-xs font-medium w-14 capitalize" style={{ color: DIFF_COLOR[difficulty] }}>
-                                        {difficulty}
-                                    </span>
-                                    <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
-                                        <div className="h-full rounded-full transition-all duration-700"
-                                            style={{ width: `${accuracy}%`, backgroundColor: DIFF_COLOR[difficulty] }} />
+                            {data.sectionBreakdown.map(({ section, total, correct, accuracy }) => {
+                                const meta = SECTION_META[section] || { label: section, color: '#534AB7' }
+                                return (
+                                    <div key={section} className="flex items-center gap-4">
+                                        <span className="text-xs font-medium w-20" style={{ color: meta.color }}>
+                                            {meta.label}
+                                        </span>
+                                        <div className="flex-1 h-2 rounded-full bg-gray-100 overflow-hidden">
+                                            <div className="h-full rounded-full transition-all duration-700"
+                                                style={{ width: `${accuracy}%`, backgroundColor: meta.color }} />
+                                        </div>
+                                        <span className="text-xs font-mono text-gray-500 w-20 text-right">
+                                            {correct}/{total} · {accuracy}%
+                                        </span>
                                     </div>
-                                    <span className="text-xs font-mono text-gray-500 w-20 text-right">
-                                        {correct}/{total} · {accuracy}%
-                                    </span>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 )}
@@ -266,7 +269,7 @@ export default function AnalyticsPage() {
                     {/* Table header */}
                     <div className="grid px-6 py-2 border-b border-gray-50"
                         style={{ gridTemplateColumns: '2.5rem 1fr 6rem 5rem 5rem 5rem' }}>
-                        {['#', 'Question', 'Difficulty', 'Time', 'Attempts', 'Result'].map(h => (
+                        {['#', 'Question', 'Section', 'Time', 'Attempts', 'Result'].map(h => (
                             <span key={h} className="text-xs font-medium text-gray-400">{h}</span>
                         ))}
                     </div>
@@ -280,9 +283,9 @@ export default function AnalyticsPage() {
                                     style={{ gridTemplateColumns: '2.5rem 1fr 6rem 5rem 5rem 5rem' }}>
                                     <span className="text-xs font-mono text-gray-400">{q.label}</span>
                                     <span className="text-sm text-gray-700 pr-4 truncate">{q.questionText}</span>
-                                    <span className="text-xs font-medium capitalize"
-                                        style={{ color: DIFF_COLOR[q.difficulty] }}>
-                                        {q.difficulty}
+                                    <span className="text-xs font-medium"
+                                        style={{ color: (SECTION_META[q.section] || {}).color || '#6b7280' }}>
+                                        {(SECTION_META[q.section] || {}).label || q.section}
                                     </span>
                                     <span className="text-xs font-mono text-gray-500">{formatTime(q.timeTaken)}</span>
                                     <span className="text-xs font-mono text-gray-500">{q.attempts}</span>
