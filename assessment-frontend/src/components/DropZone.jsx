@@ -38,7 +38,7 @@ export default function DropZone({
       ref={setNodeRef}
       className={`flex min-h-[2.5rem] flex-col rounded-xl border-2 border-dashed p-1.5 transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out will-change-transform sm:p-2 ${
         isOver
-          ? 'scale-[1.01] border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.30)]'
+          ? 'scale-[1.01] border-[#534AB7] bg-[#EEEDFE] shadow-[0_0_0_3px_rgba(83,74,183,0.30)]'
           : 'border-slate-300 bg-slate-50/60'
       } ${className}`}
       aria-label={label ? `Drop zone: ${label}` : 'Drop zone'}

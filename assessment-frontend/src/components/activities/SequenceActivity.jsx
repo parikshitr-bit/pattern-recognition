@@ -30,10 +30,10 @@ function RowBody({ index, label, dragging = false }) {
   return (
     <div
       className={`dnd-draggable flex touch-none select-none items-center gap-2.5 rounded-lg border bg-white px-2.5 py-1.5 ${
-        dragging ? 'border-indigo-300 ring-2 ring-indigo-200' : 'border-slate-200 shadow-sm hover:border-indigo-300'
+        dragging ? 'border-[#AFA9EC] ring-2 ring-[#CECBF6]' : 'border-slate-200 shadow-sm hover:border-[#AFA9EC]'
       }`}
     >
-      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-indigo-600 text-xs font-bold text-white">
+      <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[#534AB7] text-xs font-bold text-white">
         {index + 1}
       </span>
       <span className="min-w-0 flex-1 text-xs font-medium leading-snug text-slate-800 sm:text-sm">{label}</span>
@@ -140,7 +140,7 @@ const SequenceActivity = forwardRef(function SequenceActivity(
       onDragCancel={() => setActiveId(null)}
       onDragEnd={handleDragEnd}
     >
-      <div className="mx-auto mb-1.5 flex w-full max-w-2xl items-center justify-center gap-1.5 rounded-md bg-indigo-50 py-1 text-[11px] font-bold uppercase tracking-wide text-indigo-700">
+      <div className="mx-auto mb-1.5 flex w-full max-w-2xl items-center justify-center gap-1.5 rounded-md bg-[#EEEDFE] py-1 text-[11px] font-bold uppercase tracking-wide text-[#3C3489]">
         <span aria-hidden>▲</span>
         <span>Top = first step</span>
       </div>

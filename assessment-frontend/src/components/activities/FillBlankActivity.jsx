@@ -45,9 +45,9 @@ function BlankSlot({ id, children, filled }) {
       ref={setNodeRef}
       className={`mx-1 inline-flex min-h-[2rem] min-w-[6rem] items-center justify-center rounded-lg border-2 border-dashed px-1.5 py-0.5 align-middle transition-[background-color,border-color,box-shadow] duration-150 ${
         isOver
-          ? 'border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.30)]'
+          ? 'border-[#534AB7] bg-[#EEEDFE] shadow-[0_0_0_3px_rgba(83,74,183,0.30)]'
           : filled
-            ? 'border-indigo-200 bg-white'
+            ? 'border-[#CECBF6] bg-white'
             : 'border-slate-300 bg-slate-50/60'
       }`}
     >
@@ -192,7 +192,7 @@ const FillBlankActivity = forwardRef(function FillBlankActivity(
           aria-label="Word bank"
           className={`rounded-xl border-2 border-dashed p-2 transition-[background-color,border-color,box-shadow] duration-150 ${
             trayRef.isOver
-              ? 'border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.30)]'
+              ? 'border-[#534AB7] bg-[#EEEDFE] shadow-[0_0_0_3px_rgba(83,74,183,0.30)]'
               : 'border-slate-300 bg-slate-50/60'
           }`}
         >

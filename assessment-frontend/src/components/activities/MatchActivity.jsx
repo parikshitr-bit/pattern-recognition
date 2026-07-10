@@ -30,7 +30,7 @@ import {
 // One distinct color per problem (by position), shown on both the problem and the
 // solution it is connected to, so the pairing reads as a single colored link.
 const PAIR_COLORS = [
-  { badge: 'bg-indigo-600', card: 'border-indigo-300 bg-indigo-50/70', ring: 'ring-indigo-200' },
+  { badge: 'bg-[#534AB7]', card: 'border-[#AFA9EC] bg-[#EEEDFE]/70', ring: 'ring-[#CECBF6]' },
   { badge: 'bg-emerald-600', card: 'border-emerald-300 bg-emerald-50/70', ring: 'ring-emerald-200' },
   { badge: 'bg-amber-500', card: 'border-amber-300 bg-amber-50/70', ring: 'ring-amber-200' },
   { badge: 'bg-rose-600', card: 'border-rose-300 bg-rose-50/70', ring: 'ring-rose-200' },
@@ -62,7 +62,7 @@ function ProblemCard({ id, label, color, number }) {
       ref={setNodeRef}
       style={style}
       className={`dnd-draggable flex w-full cursor-grab touch-none select-none items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-slate-800 shadow-sm transition hover:shadow active:cursor-grabbing sm:text-[13px] sm:leading-snug ${
-        color ? color.card : 'border-slate-200 bg-white hover:border-indigo-300'
+        color ? color.card : 'border-slate-200 bg-white hover:border-[#AFA9EC]'
       }`}
       aria-label={`Problem: ${label}.${number ? ` Connected to solution ${number}.` : ' Drag onto a solution on the right.'}`}
       {...listeners}
@@ -92,7 +92,7 @@ function SolutionSlot({ id, label, color, number }) {
       ref={setNodeRef}
       className={`flex min-h-[2.5rem] w-full items-center gap-2 rounded-lg border-2 px-2 py-1.5 text-[11px] font-medium leading-tight text-slate-800 transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out will-change-transform sm:text-[13px] sm:leading-snug ${
         isOver
-          ? 'scale-[1.01] border-indigo-500 bg-indigo-50 shadow-[0_0_0_3px_rgba(99,102,241,0.30)]'
+          ? 'scale-[1.01] border-[#534AB7] bg-[#EEEDFE] shadow-[0_0_0_3px_rgba(83,74,183,0.30)]'
           : color
             ? color.card
             : 'border-dashed border-slate-300 bg-slate-50/60'
@@ -250,7 +250,7 @@ const MatchActivity = forwardRef(function MatchActivity(
           <DragOverlayCard>
             <div
               className={`flex select-none items-center gap-2 rounded-lg border bg-white px-2 py-1.5 text-[11px] font-semibold leading-tight text-slate-900 sm:text-[13px] ${
-                activeColor ? activeColor.card : 'border-indigo-300'
+                activeColor ? activeColor.card : 'border-[#AFA9EC]'
               }`}
             >
               <Badge color={activeColor} number={activeNumber} />

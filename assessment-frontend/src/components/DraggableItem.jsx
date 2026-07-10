@@ -29,14 +29,14 @@ export default function DraggableItem({ id, label, badge, disabled = false }) {
       ref={setNodeRef}
       style={style}
       className={`dnd-draggable flex w-full touch-none select-none items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-left text-[11px] font-medium leading-tight text-slate-800 shadow-sm transition active:cursor-grabbing sm:text-[13px] sm:leading-snug ${
-        disabled ? 'cursor-default opacity-60' : 'cursor-grab hover:border-indigo-300 hover:shadow'
+        disabled ? 'cursor-default opacity-60' : 'cursor-grab hover:border-[#AFA9EC] hover:shadow'
       }`}
       aria-label={`Draggable: ${label}`}
       {...listeners}
       {...attributes}
     >
       {badge != null ? (
-        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[#EEEDFE] text-xs font-bold text-[#3C3489]">
           {badge}
         </span>
       ) : null}
@@ -58,9 +58,9 @@ DraggableItem.propTypes = {
  */
 export function DragItemPreview({ label, badge }) {
   return (
-    <div className="flex w-full cursor-grabbing select-none items-center gap-2 rounded-lg border border-indigo-300 bg-white px-2.5 py-2 text-left text-xs font-semibold leading-snug text-slate-900 shadow-lg ring-2 ring-indigo-200 sm:text-sm">
+    <div className="flex w-full cursor-grabbing select-none items-center gap-2 rounded-lg border border-[#AFA9EC] bg-white px-2.5 py-2 text-left text-xs font-semibold leading-snug text-slate-900 shadow-lg ring-2 ring-[#CECBF6] sm:text-sm">
       {badge != null ? (
-        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700">
+        <span className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-[#EEEDFE] text-xs font-bold text-[#3C3489]">
           {badge}
         </span>
       ) : null}
