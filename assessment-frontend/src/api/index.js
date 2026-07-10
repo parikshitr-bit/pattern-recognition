@@ -21,6 +21,10 @@ export const fetchQuestions = (candidateId) =>
 export const startSession = (candidateId) =>
   api.post('/sessions/start', { candidateId })
 
+// Autosave a single answer while the attempt is in progress
+export const autosaveResponse = (sessionId, payload) =>
+  api.patch(`/sessions/${sessionId}/responses`, payload)
+
 export const submitSession = (sessionId, payload) =>
   api.post(`/sessions/${sessionId}/submit`, payload)
 

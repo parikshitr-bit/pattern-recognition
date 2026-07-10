@@ -17,12 +17,23 @@ public class SessionController {
 
     private final SessionService sessionService;
 
-    // POST /api/sessions/start
+    // POST /api/sessions/start — starts a new attempt or resumes the in-progress one
     @PostMapping("/start")
     public ResponseEntity<?> startSession(@RequestBody StartSessionRequest request) {
         try {
-            StartSessionResponse response = sessionService.startSession(request);
+            SessionStartResponse response = sessionService.startOrResume(request.getCandidateId());
             return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    // PATCH /api/sessions/{sessionId}/responses — autosave a single answer
+    @PatchMapping("/{sessionId}/responses")
+    public ResponseEntity<?> autosave(@PathVariable UUID sessionId, @RequestBody AutosaveRequest request) {
+        try {
+            sessionService.saveResponse(sessionId, request);
+            return ResponseEntity.ok(Map.of("status", "saved"));
         } catch (RuntimeException e) {
             return ResponseEntity.status(400).body(Map.of("message", e.getMessage()));
         }

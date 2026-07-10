@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import UnansweredWarningModal from '../components/UnansweredWarningModal'
-import { fetchQuestions, startSession, submitSession } from '../api'
+import { startSession, autosaveResponse, submitSession } from '../api'
+import { useToast } from '../context/ToastContext'
 
 // ─────────────────────────────────────────────
 // Pattern renderers — one per question type
@@ -145,6 +146,7 @@ const DIFFICULTY_STYLE = {
 // ─────────────────────────────────────────────
 export default function AssessmentPage() {
     const navigate = useNavigate()
+    const toast = useToast()
 
     // ── State ──────────────────────────────────
     const [questions, setQuestions] = useState([])   // fetched from API
@@ -155,40 +157,55 @@ export default function AssessmentPage() {
     const [answers, setAnswers] = useState({})     // { questionId: optionIndex }
     const [timePerQuestion, setTimePerQuestion] = useState({}) // { questionId: seconds }
     const [attemptsPerQuestion, setAttemptsPerQuestion] = useState({}) // { questionId: count }
-    const [totalSeconds, setTotalSeconds] = useState(0)
+    const [remaining, setRemaining] = useState(null)   // seconds left (server-authoritative)
     const [submitting, setSubmitting] = useState(false)
     const [showUnanswered, setShowUnanswered] = useState(false)
+    const [reviewFlags, setReviewFlags] = useState({})   // { questionId: true } marked for review
 
     const questionTimer = useTimer()
-    const totalTimerRef = useRef(null)
-    const sessionStartRef = useRef(Date.now())
+    const autoSubmittedRef = useRef(false)
+    const submitRef = useRef(() => {})   // points at the latest handleSubmit for the countdown
 
     const candidateId = (() => {
         try { return JSON.parse(sessionStorage.getItem('candidate'))?.id } catch { return null }
     })()
 
-    // ── Start a session + load its questions on mount ──
+    // ── Start or resume the attempt on mount ──
     useEffect(() => {
         let cancelled = false
         if (!candidateId) { navigate('/login'); return }
         ;(async () => {
             try {
-                const startRes = await startSession(candidateId)
+                const { data } = await startSession(candidateId)
                 if (cancelled) return
-                setSessionId(startRes.data.sessionId)
+                if (data.expired) { navigate(`/results/${data.sessionId}`); return }
 
-                const qRes = await fetchQuestions(candidateId)
-                if (cancelled) return
-                const mapped = (qRes.data || []).map(q => ({
+                setSessionId(data.sessionId)
+                setQuestions((data.questions || []).map(q => ({
                     id: q.id,
                     type: q.questionType,
                     question_text: q.questionText,
                     pattern_data: q.patternData,
                     options: q.options,
                     difficulty: q.difficulty,
-                }))
-                setQuestions(mapped)
-                sessionStartRef.current = Date.now()
+                })))
+
+                // Restore any answers saved on a previous visit to this attempt.
+                const ans = {}, tpq = {}, apq = {}
+                ;(data.savedResponses || []).forEach(s => {
+                    if (s.selectedOptionIndex !== null && s.selectedOptionIndex !== undefined) ans[s.questionId] = s.selectedOptionIndex
+                    if (s.timeTakenSeconds) tpq[s.questionId] = s.timeTakenSeconds
+                    if (s.attemptCount) apq[s.questionId] = s.attemptCount
+                })
+                setAnswers(ans); setTimePerQuestion(tpq); setAttemptsPerQuestion(apq)
+
+                // Marked-for-review flags are kept per-browser.
+                try { setReviewFlags(JSON.parse(localStorage.getItem(`review_${data.sessionId}`) || '{}')) } catch { /* ignore */ }
+
+                setRemaining(Math.max(0, Math.floor(data.remainingSeconds)))
+                if (data.resumed) {
+                    toast.info('Resumed your assessment already in progress — the timer kept running while you were away.')
+                }
             } catch (err) {
                 if (!cancelled) setLoadError(err.response?.data?.message || 'Could not start the assessment.')
             } finally {
@@ -198,10 +215,48 @@ export default function AssessmentPage() {
         return () => { cancelled = true }
     }, [candidateId])
 
-    // ── Total timer ────────────────────────────
+    // ── Countdown (server-authoritative) — tick the remaining time down ──
     useEffect(() => {
-        totalTimerRef.current = setInterval(() => setTotalSeconds(s => s + 1), 1000)
-        return () => clearInterval(totalTimerRef.current)
+        if (!sessionId) return
+        const id = setInterval(() => {
+            setRemaining(prev => (prev == null ? prev : Math.max(0, prev - 1)))
+        }, 1000)
+        return () => clearInterval(id)
+    }, [sessionId])
+
+    // ── Auto-submit once the clock hits zero ──
+    useEffect(() => {
+        if (remaining === 0 && sessionId && !autoSubmittedRef.current) {
+            autoSubmittedRef.current = true
+            submitRef.current()
+        }
+    }, [remaining, sessionId])
+
+    // ── Warn before closing / refreshing during an attempt ──
+    useEffect(() => {
+        const handler = (e) => { e.preventDefault(); e.returnValue = '' }
+        window.addEventListener('beforeunload', handler)
+        return () => window.removeEventListener('beforeunload', handler)
+    }, [])
+
+    // ── Warn on the browser Back button (client-side nav isn't caught by beforeunload) ──
+    useEffect(() => {
+        // Push a guard entry so the first Back press lands here instead of leaving.
+        window.history.pushState(null, '', window.location.href)
+        const onPopState = () => {
+            const leave = window.confirm(
+                'Leave the assessment? Your answers are saved and you can resume — but the timer keeps running.'
+            )
+            if (leave) {
+                window.removeEventListener('popstate', onPopState)
+                navigate('/dashboard')
+            } else {
+                // Stay: re-arm the guard entry.
+                window.history.pushState(null, '', window.location.href)
+            }
+        }
+        window.addEventListener('popstate', onPopState)
+        return () => window.removeEventListener('popstate', onPopState)
     }, [])
 
     // ── Per-question timer: restart on question change ──
@@ -248,44 +303,62 @@ export default function AssessmentPage() {
     const isLast = currentIndex === questions.length - 1
     const selectedOption = answers[current.id] ?? null
 
-    // ── Select an answer 
-    const handleSelect = (optionIndex) => {
-        const alreadyAnswered = answers[current.id] !== undefined
-        setAnswers(prev => ({ ...prev, [current.id]: optionIndex }))
-        setAttemptsPerQuestion(prev => ({
-            ...prev,
-            [current.id]: (prev[current.id] || 0) + (alreadyAnswered ? 1 : 1),
-        }))
+    // Push the latest state for one question to the server (fire-and-forget).
+    const autosave = (questionId, fields) => {
+        if (!sessionId) return
+        autosaveResponse(sessionId, { questionId, ...fields }).catch(() => { /* non-blocking */ })
     }
 
-    // ── Navigate between questions 
+    // ── Select an answer ──
+    const handleSelect = (optionIndex) => {
+        const newAttempt = (attemptsPerQuestion[current.id] || 0) + 1
+        setAnswers(prev => ({ ...prev, [current.id]: optionIndex }))
+        setAttemptsPerQuestion(prev => ({ ...prev, [current.id]: newAttempt }))
+        autosave(current.id, {
+            selectedOptionIndex: optionIndex,
+            timeTakenSeconds: timePerQuestion[current.id] || 0,
+            attemptCount: newAttempt,
+        })
+    }
+
+    // ── Save elapsed time for the current question (on navigation), and autosave ──
     const saveCurrentTime = () => {
         const elapsed = questionTimer.stop()
-        setTimePerQuestion(prev => ({
-            ...prev,
-            [current.id]: (prev[current.id] || 0) + elapsed,
-        }))
+        const newTime = (timePerQuestion[current.id] || 0) + elapsed
+        setTimePerQuestion(prev => ({ ...prev, [current.id]: newTime }))
+        autosave(current.id, {
+            selectedOptionIndex: answers[current.id] ?? null,
+            timeTakenSeconds: newTime,
+            attemptCount: attemptsPerQuestion[current.id] || 0,
+        })
     }
 
-    const goNext = () => {
+    const goNext = () => { saveCurrentTime(); setCurrentIndex(i => i + 1) }
+    const goPrev = () => { saveCurrentTime(); setCurrentIndex(i => i - 1) }
+
+    // Jump straight to any question from the palette.
+    const goToQuestion = (index) => {
+        if (index === currentIndex) return
         saveCurrentTime()
-        setCurrentIndex(i => i + 1)
+        setCurrentIndex(index)
     }
 
-    const goPrev = () => {
-        saveCurrentTime()
-        setCurrentIndex(i => i - 1)
+    // Toggle "mark for review" on the current question (persisted per-browser).
+    const toggleReview = () => {
+        setReviewFlags(prev => {
+            const next = { ...prev, [current.id]: !prev[current.id] }
+            try { localStorage.setItem(`review_${sessionId}`, JSON.stringify(next)) } catch { /* ignore */ }
+            return next
+        })
     }
 
     const handleSubmit = async () => {
-        saveCurrentTime()
+        if (submitting) return
         setSubmitting(true)
-
-        const totalTime = Math.floor((Date.now() - sessionStartRef.current) / 1000)
+        saveCurrentTime()
 
         const payload = {
             candidateId,
-            totalTimeSeconds: totalTime,
             responses: questions.map(q => ({
                 questionId: q.id,
                 selectedOptionIndex: answers[q.id] ?? null,
@@ -295,18 +368,20 @@ export default function AssessmentPage() {
         }
 
         try {
-            await submitSession(sessionId, payload)
-            // Results and analytics are fetched from the backend by session id.
+            await submitSession(sessionId, payload)   // server grades + records elapsed time
+            try { localStorage.removeItem(`review_${sessionId}`) } catch { /* ignore */ }
             navigate(`/results/${sessionId}`)
         } catch (err) {
             setSubmitting(false)
             setLoadError(err.response?.data?.message || 'Failed to submit your assessment. Please try again.')
         }
     }
+    submitRef.current = handleSubmit   // keep the countdown's auto-submit pointing at the latest
 
     // ── Progress ───────────────────────────────
     const answeredCount = Object.keys(answers).length
     const progressPct = ((currentIndex) / questions.length) * 100
+    const lowTime = remaining != null && remaining <= 60
 
     const diff = DIFFICULTY_STYLE[current.difficulty] || DIFFICULTY_STYLE.easy
 
@@ -360,12 +435,15 @@ export default function AssessmentPage() {
                             <span className="text-[10px] text-gray-400">this question</span>
                         </div>
                         <div className="w-px h-6 bg-gray-100" />
-                        {/* Total timer */}
+                        {/* Time remaining (server-timed) */}
                         <div className="flex flex-col items-end">
-                            <span className="text-xs font-mono font-medium" style={{ color: '#534AB7' }}>
-                                {formatTime(totalSeconds)}
+                            <span className="text-xs font-mono font-medium"
+                                style={{ color: lowTime ? '#A32D2D' : '#534AB7' }}>
+                                {remaining != null ? formatTime(remaining) : '--:--'}
                             </span>
-                            <span className="text-[10px] text-gray-400">total</span>
+                            <span className="text-[10px]" style={{ color: lowTime ? '#A32D2D' : '#9ca3af' }}>
+                                remaining
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -374,6 +452,54 @@ export default function AssessmentPage() {
             {/* ── Question area ─────────────────────── */}
             <main className="flex-1 flex flex-col items-center justify-center px-4 py-10">
                 <div className="w-full max-w-2xl flex flex-col gap-6">
+
+                    {/* Question palette — jump to any question, see status at a glance */}
+                    <div className="bg-white rounded-2xl border border-gray-100 p-4 flex flex-col gap-3">
+                        <div className="flex items-center justify-between flex-wrap gap-y-2">
+                            <span className="text-xs font-medium text-gray-500">Questions</span>
+                            <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#1D9E75' }} />Answered
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#F59E0B' }} />For review
+                                </span>
+                                <span className="flex items-center gap-1">
+                                    <span className="w-2.5 h-2.5 rounded" style={{ backgroundColor: '#d1d5db' }} />Unanswered
+                                </span>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {questions.map((q, i) => {
+                                const answered = answers[q.id] !== undefined
+                                const review = !!reviewFlags[q.id]
+                                const isCurrent = i === currentIndex
+                                // Solid, high-contrast fills so each state is obvious at a glance.
+                                const bg = review ? '#F59E0B' : answered ? '#1D9E75' : '#e5e7eb'
+                                const fg = (review || answered) ? '#ffffff' : '#4b5563'
+                                return (
+                                    <button
+                                        key={q.id}
+                                        onClick={() => goToQuestion(i)}
+                                        aria-label={`Go to question ${i + 1}`}
+                                        className="relative w-9 h-9 rounded-lg text-xs font-semibold font-mono transition-all active:scale-95"
+                                        style={{
+                                            backgroundColor: bg,
+                                            color: fg,
+                                            // white gap + purple outline reads clearly on any fill colour
+                                            boxShadow: isCurrent ? '0 0 0 2px #ffffff, 0 0 0 4px #534AB7' : 'none',
+                                        }}
+                                    >
+                                        {i + 1}
+                                        {review && answered && (
+                                            <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
+                                                style={{ backgroundColor: '#1D9E75', border: '2px solid #fff' }} />
+                                        )}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
 
                     {/* Question card */}
                     <div className="bg-white rounded-2xl border border-gray-100 p-8 flex flex-col gap-8 shadow-sm">
@@ -449,41 +575,27 @@ export default function AssessmentPage() {
                             Previous
                         </button>
 
-                        {/* Attempt indicator — center */}
-                        <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-xs font-mono text-gray-400">
-                                {attemptsPerQuestion[current.id]
-                                    ? `${attemptsPerQuestion[current.id]} attempt${attemptsPerQuestion[current.id] > 1 ? 's' : ''}`
-                                    : 'Not answered'}
-                            </span>
-                            {/* Dot indicators for all questions */}
-                            <div className="flex gap-1 mt-0.5">
-                                {questions.map((q, i) => (
-                                    <div
-                                        key={q.id}
-                                        className="w-1.5 h-1.5 rounded-full transition-all"
-                                        style={{
-                                            backgroundColor:
-                                                i === currentIndex ? '#534AB7'
-                                                    : answers[q.id] !== undefined ? '#1D9E75'
-                                                        : '#e5e7eb',
-                                        }}
-                                    />
-                                ))}
-                            </div>
-                        </div>
+                        {/* Mark for review — center */}
+                        <button
+                            onClick={toggleReview}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium
+                         border transition-all active:scale-[0.98]"
+                            style={reviewFlags[current.id]
+                                ? { backgroundColor: '#FEF3C7', borderColor: '#F59E0B', color: '#92400E' }
+                                : { backgroundColor: '#fff', borderColor: '#e5e7eb', color: '#6b7280' }}
+                        >
+                            <svg width="15" height="15" viewBox="0 0 24 24"
+                                fill={reviewFlags[current.id] ? 'currentColor' : 'none'}
+                                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+                            </svg>
+                            {reviewFlags[current.id] ? 'Marked for review' : 'Mark for review'}
+                        </button>
 
                         {/* Next / Submit */}
                         {isLast ? (
                             <button
-                                onClick={() => {
-                                    const unanswered = questions.filter(q => answers[q.id] === undefined).length
-                                    if (unanswered > 0) {
-                                        setShowUnanswered(true)
-                                    } else {
-                                        handleSubmit()           // all answered, submit directly
-                                    }
-                                }}
+                                onClick={() => setShowUnanswered(true)} // always confirm before submitting
                                 disabled={submitting}
                                 className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium
                            text-white transition-all active:scale-[0.98] disabled:opacity-70"
@@ -526,7 +638,8 @@ export default function AssessmentPage() {
             </main>
             {showUnanswered && (
                 <UnansweredWarningModal
-                    unansweredCount={questions.filter(q => answers[q.id] === undefined).length}
+                    unansweredNumbers={questions.map((q, i) => answers[q.id] === undefined ? i + 1 : null).filter(Boolean)}
+                    reviewNumbers={questions.map((q, i) => reviewFlags[q.id] ? i + 1 : null).filter(Boolean)}
                     onConfirm={() => { setShowUnanswered(false); handleSubmit() }}
                     onClose={() => setShowUnanswered(false)}
                 />

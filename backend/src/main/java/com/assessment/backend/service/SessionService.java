@@ -1,5 +1,6 @@
 package com.assessment.backend.service;
 
+import com.assessment.backend.dto.questions.QuestionDto;
 import com.assessment.backend.dto.sessions.*;
 import com.assessment.backend.model.*;
 import com.assessment.backend.repository.*;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,78 +24,113 @@ public class SessionService {
     private final ScoreService scoreService;
 
     private static final int MAX_ATTEMPTS = 3;
+    private static final int QUESTIONS_PER_ATTEMPT = 10;
+    // Total wall-clock time allowed per attempt. Server-authoritative: measured from
+    // the session's started_at, so closing the window does not pause the clock.
+    private static final int TIME_LIMIT_SECONDS = 20 * 60; // 20 minutes
 
-    // ── Start session ──────────────────────────────────────────────────────
+    // ── Start or resume an attempt ───────────────────────────────────────────
     @Transactional
-    public StartSessionResponse startSession(StartSessionRequest request) {
+    public SessionStartResponse startOrResume(UUID candidateId) {
 
-        // 1. Verify candidate exists
-        Candidate candidate = candidateRepository.findById(request.getCandidateId())
+        Candidate candidate = candidateRepository.findById(candidateId)
                 .orElseThrow(() -> new RuntimeException("Candidate not found"));
 
-        // 2. Check attempt limit
-        int completed = sessionRepository.countCompletedByCandidate(candidate.getId());
+        // Resume an existing in-progress attempt if one exists.
+        Optional<AssessmentSession> existing = sessionRepository
+                .findFirstByCandidate_IdAndStatusOrderByStartedAtDesc(candidateId, "IN_PROGRESS");
+
+        if (existing.isPresent()) {
+            AssessmentSession session = existing.get();
+            List<Response> rows = responseRepository.findBySessionIdOrderById(session.getId());
+            if (rows.isEmpty()) {
+                // No pinned questions → an abandoned/legacy session, not a real attempt.
+                // Discard it and start fresh rather than counting it as a completed attempt.
+                sessionRepository.delete(session);
+            } else {
+                long remaining = remainingSeconds(session);
+                if (remaining <= 0) {
+                    // Time ran out while the candidate was away → finalize with whatever was saved.
+                    finalizeSession(session, rows);
+                    return SessionStartResponse.expired(session.getId());
+                }
+                return buildStartResponse(session, true, remaining);
+            }
+        }
+
+        // No in-progress attempt → start a new one (enforce the attempt limit).
+        int completed = sessionRepository.countCompletedByCandidate(candidateId);
         if (completed >= MAX_ATTEMPTS) {
             throw new RuntimeException("You have used all " + MAX_ATTEMPTS + " attempts");
         }
 
-        // 3. Create new session
         AssessmentSession session = new AssessmentSession();
         session.setCandidate(candidate);
-        session.setAttemptNumber(sessionRepository.getNextAttemptNumber(candidate.getId()));
+        session.setAttemptNumber(sessionRepository.getNextAttemptNumber(candidateId));
         session.setStatus("IN_PROGRESS");
+        session.setStartedAt(LocalDateTime.now());
         sessionRepository.save(session);
 
-        return new StartSessionResponse(session.getId(), session.getAttemptNumber());
+        // Pin this attempt's questions by pre-creating (blank) response rows.
+        for (Question q : pickQuestions(candidateId)) {
+            Response r = new Response();
+            r.setSession(session);
+            r.setQuestion(q);
+            r.setSelectedOptionIndex(null);
+            r.setIsCorrect(null);
+            r.setTimeTakenSeconds(0);
+            r.setAttemptCount(0);
+            responseRepository.save(r);
+        }
+
+        return buildStartResponse(session, false, TIME_LIMIT_SECONDS);
     }
 
-    // ── Submit session ─────────────────────────────────────────────────────
+    // ── Autosave a single answer during the attempt ──────────────────────────
+    @Transactional
+    public void saveResponse(UUID sessionId, AutosaveRequest req) {
+        AssessmentSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new RuntimeException("Session not found"));
+        if (!"IN_PROGRESS".equals(session.getStatus())) {
+            return; // ignore autosaves once the attempt is finalized
+        }
+        Response r = responseRepository
+                .findBySession_IdAndQuestion_Id(sessionId, req.getQuestionId())
+                .orElseThrow(() -> new RuntimeException("Question is not part of this attempt"));
+        r.setSelectedOptionIndex(req.getSelectedOptionIndex());
+        if (req.getTimeTakenSeconds() != null) r.setTimeTakenSeconds(req.getTimeTakenSeconds());
+        if (req.getAttemptCount() != null) r.setAttemptCount(req.getAttemptCount());
+        responseRepository.save(r);
+    }
+
+    // ── Submit / finalize an attempt ─────────────────────────────────────────
     @Transactional
     public ResultResponse submitSession(UUID sessionId, SubmitRequest request) {
 
-        // 1. Find session
         AssessmentSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
-        // 2. Save all responses
-        List<Response> savedResponses = new ArrayList<>();
-
-        for (ResponseDto dto : request.getResponses()) {
-            Question question = questionRepository.findById(dto.getQuestionId())
-                    .orElseThrow(() -> new RuntimeException("Question not found: " + dto.getQuestionId()));
-
-            boolean isSkipped = dto.getSelectedOptionIndex() == null;
-            boolean isCorrect = !isSkipped &&
-                    dto.getSelectedOptionIndex().equals(question.getCorrectOptionIndex());
-
-            Response response = new Response();
-            response.setSession(session);
-            response.setQuestion(question);
-            response.setSelectedOptionIndex(dto.getSelectedOptionIndex());
-            response.setIsCorrect(isCorrect);
-            response.setTimeTakenSeconds(dto.getTimeTakenSeconds() != null ? dto.getTimeTakenSeconds() : 0);
-            response.setAttemptCount(dto.getAttemptCount() != null ? dto.getAttemptCount() : 0);
-            savedResponses.add(responseRepository.save(response));
+        // Already finalized (e.g. auto-submitted on expiry) → just return the result.
+        if ("COMPLETED".equals(session.getStatus())) {
+            return getResult(sessionId);
         }
 
-        // 3. Calculate score
-        int total     = savedResponses.size();
-        int correct   = (int) savedResponses.stream().filter(r -> Boolean.TRUE.equals(r.getIsCorrect())).count();
-        int incorrect = (int) savedResponses.stream().filter(r -> !Boolean.TRUE.equals(r.getIsCorrect()) && r.getSelectedOptionIndex() != null).count();
-        int skipped   = total - correct - incorrect;
-        int score     = scoreService.calculateScore(correct);
-        double accuracy = scoreService.calculateAccuracy(correct, total);
+        // Apply the submitted answers onto the pinned response rows.
+        Map<UUID, Response> byQuestion = responseRepository.findBySessionIdOrderById(sessionId)
+                .stream().collect(Collectors.toMap(
+                        r -> r.getQuestion().getId(), r -> r, (a, b) -> a, LinkedHashMap::new));
 
-        // 4. Update session
-        session.setStatus("COMPLETED");
-        session.setCompletedAt(LocalDateTime.now());
-        session.setTotalTimeSeconds(request.getTotalTimeSeconds());
-        session.setFinalScore(score);
-        session.setAccuracyPercentage(accuracy);
-        sessionRepository.save(session);
+        if (request != null && request.getResponses() != null) {
+            for (ResponseDto dto : request.getResponses()) {
+                Response r = byQuestion.get(dto.getQuestionId());
+                if (r == null) continue; // not part of this attempt
+                r.setSelectedOptionIndex(dto.getSelectedOptionIndex());
+                if (dto.getTimeTakenSeconds() != null) r.setTimeTakenSeconds(dto.getTimeTakenSeconds());
+                if (dto.getAttemptCount() != null) r.setAttemptCount(dto.getAttemptCount());
+            }
+        }
 
-        // 5. Build result response
-        return buildResultResponse(session, savedResponses, correct, incorrect, skipped, score, accuracy);
+        return finalizeSession(session, new ArrayList<>(byQuestion.values()));
     }
 
     // ── Get result ─────────────────────────────────────────────────────────
@@ -101,7 +138,7 @@ public class SessionService {
         AssessmentSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
-        List<Response> responses = responseRepository.findBySessionId(sessionId);
+        List<Response> responses = responseRepository.findBySessionIdOrderById(sessionId);
 
         int correct   = (int) responses.stream().filter(r -> Boolean.TRUE.equals(r.getIsCorrect())).count();
         int incorrect = (int) responses.stream().filter(r -> !Boolean.TRUE.equals(r.getIsCorrect()) && r.getSelectedOptionIndex() != null).count();
@@ -118,7 +155,7 @@ public class SessionService {
         AssessmentSession session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session not found"));
 
-        List<Response> responses = responseRepository.findBySessionId(sessionId);
+        List<Response> responses = responseRepository.findBySessionIdOrderById(sessionId);
 
         int correct   = (int) responses.stream().filter(r -> Boolean.TRUE.equals(r.getIsCorrect())).count();
         int incorrect = (int) responses.stream().filter(r -> !Boolean.TRUE.equals(r.getIsCorrect()) && r.getSelectedOptionIndex() != null).count();
@@ -185,7 +222,76 @@ public class SessionService {
         }).collect(Collectors.toList());
     }
 
-    // ── Helper ─────────────────────────────────────────────────────────────
+    // ── Helpers ──────────────────────────────────────────────────────────────
+
+    /** Seconds left before the attempt's time limit, based on the server start time. */
+    private long remainingSeconds(AssessmentSession session) {
+        long elapsed = ChronoUnit.SECONDS.between(session.getStartedAt(), LocalDateTime.now());
+        return TIME_LIMIT_SECONDS - elapsed;
+    }
+
+    /** Pick this attempt's questions: prefer unseen, fall back to a random 10. */
+    private List<Question> pickQuestions(UUID candidateId) {
+        List<Question> unseen = questionRepository.findUnseenQuestions(candidateId);
+        return unseen.size() < QUESTIONS_PER_ATTEMPT
+                ? questionRepository.findTenRandom()
+                : unseen;
+    }
+
+    private QuestionDto toQuestionDto(Question q) {
+        return new QuestionDto(
+                q.getId(), q.getQuestionText(), q.getQuestionType(),
+                q.getPatternData(), q.getOptions(), q.getDifficulty());
+    }
+
+    private SessionStartResponse buildStartResponse(AssessmentSession session, boolean resumed, long remaining) {
+        List<Response> rows = responseRepository.findBySessionIdOrderById(session.getId());
+        List<QuestionDto> questions = rows.stream()
+                .map(r -> toQuestionDto(r.getQuestion()))
+                .collect(Collectors.toList());
+        List<SavedResponseDto> saved = rows.stream()
+                .map(r -> new SavedResponseDto(
+                        r.getQuestion().getId(),
+                        r.getSelectedOptionIndex(),
+                        r.getTimeTakenSeconds(),
+                        r.getAttemptCount()))
+                .collect(Collectors.toList());
+        return new SessionStartResponse(
+                session.getId(), session.getAttemptNumber(),
+                TIME_LIMIT_SECONDS, Math.max(0, remaining), resumed, false,
+                questions, saved);
+    }
+
+    private ResultResponse finalizeSession(AssessmentSession session, List<Response> rows) {
+        // Grade every pinned response against the correct answer.
+        for (Response r : rows) {
+            Integer sel = r.getSelectedOptionIndex();
+            boolean correct = sel != null && sel.equals(r.getQuestion().getCorrectOptionIndex());
+            r.setIsCorrect(correct);
+            responseRepository.save(r);
+        }
+
+        int total     = rows.size();
+        int correct   = (int) rows.stream().filter(r -> Boolean.TRUE.equals(r.getIsCorrect())).count();
+        int incorrect = (int) rows.stream().filter(r -> !Boolean.TRUE.equals(r.getIsCorrect()) && r.getSelectedOptionIndex() != null).count();
+        int skipped   = total - correct - incorrect;
+        int score     = scoreService.calculateScore(correct);
+        double accuracy = scoreService.calculateAccuracy(correct, total);
+
+        // Server-authoritative elapsed time, capped at the limit.
+        long elapsed = ChronoUnit.SECONDS.between(session.getStartedAt(), LocalDateTime.now());
+        int totalTime = (int) Math.min(Math.max(elapsed, 0), TIME_LIMIT_SECONDS);
+
+        session.setStatus("COMPLETED");
+        session.setCompletedAt(LocalDateTime.now());
+        session.setTotalTimeSeconds(totalTime);
+        session.setFinalScore(score);
+        session.setAccuracyPercentage(accuracy);
+        sessionRepository.save(session);
+
+        return buildResultResponse(session, rows, correct, incorrect, skipped, score, accuracy);
+    }
+
     private ResultResponse buildResultResponse(
             AssessmentSession session,
             List<Response> responses,
@@ -197,7 +303,7 @@ public class SessionService {
             Response r = responses.get(i);
             Question q = r.getQuestion();
 
-            // options is stored as JSON array in DB
+            // options is stored as a JSON array in the DB
             List<?> opts = (List<?>) q.getOptions();
             String selectedOpt = r.getSelectedOptionIndex() != null
                     ? String.valueOf(opts.get(r.getSelectedOptionIndex())) : null;

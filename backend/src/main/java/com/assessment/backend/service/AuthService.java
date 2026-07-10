@@ -37,7 +37,7 @@ public class AuthService {
         return buildAuthResponse(candidate);
     }
 
-    // ── Register ───────────────────────────────────────────────────────────
+    // ── Register 
     public AuthResponse register(RegisterRequest request) {
 
         // 1. Check username not already taken
@@ -50,7 +50,7 @@ public class AuthService {
             throw new DuplicateResourceException("Email is already registered");
         }
 
-        // 3. Build and save candidate (store the bcrypt hash, never the raw password)
+        // 3. Build and save candidate
         Candidate candidate = new Candidate();
         candidate.setName(request.getName());
         candidate.setEmail(request.getEmail());
@@ -62,7 +62,7 @@ public class AuthService {
         return buildAuthResponse(candidate);
     }
 
-    // ── Update profile ─────────────────────────────────────────────────────
+    // ── Update profile 
     public AuthResponse updateProfile(UUID candidateId, UpdateProfileRequest request) {
 
         Candidate candidate = candidateRepository.findById(candidateId)
@@ -81,7 +81,7 @@ public class AuthService {
         return buildAuthResponse(candidate);
     }
 
-    // ── Update password ────────────────────────────────────────────────────
+    // ── Update password 
     public void updatePassword(UUID candidateId, UpdatePasswordRequest request) {
 
         Candidate candidate = candidateRepository.findById(candidateId)
@@ -96,7 +96,7 @@ public class AuthService {
         candidateRepository.save(candidate);
     }
 
-    // ── Helper ─────────────────────────────────────────────────────────────
+    // ── Helper 
     private AuthResponse buildAuthResponse(Candidate candidate) {
         AuthResponse.CandidateDto dto = new AuthResponse.CandidateDto(
                 candidate.getId(),

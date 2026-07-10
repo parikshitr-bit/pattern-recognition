@@ -1,4 +1,12 @@
-export default function UnansweredWarningModal({ unansweredCount, onConfirm, onClose }) {
+export default function UnansweredWarningModal({
+    unansweredNumbers = [],
+    reviewNumbers = [],
+    onConfirm,
+    onClose,
+}) {
+    const unanswered = unansweredNumbers.length
+    const review = reviewNumbers.length
+
     return (
         <>
             {/* Backdrop */}
@@ -25,31 +33,52 @@ export default function UnansweredWarningModal({ unansweredCount, onConfirm, onC
                         </div>
                         <div className="flex flex-col gap-1">
                             <h2 className="text-base font-medium text-gray-900">
-                                {unansweredCount} question{unansweredCount > 1 ? 's' : ''} unanswered
+                                Submit your assessment?
                             </h2>
                             <p className="text-sm text-gray-500 leading-relaxed">
-                                You have skipped {unansweredCount} question{unansweredCount > 1 ? 's' : ''}.
-                                Unanswered questions will be marked as skipped and score zero points.
+                                {unanswered > 0
+                                    ? `${unanswered} question${unanswered > 1 ? 's are' : ' is'} still unanswered and will score zero. `
+                                    : 'All questions are answered. '}
+                                You can't make changes after submitting.
                             </p>
                         </div>
                     </div>
 
-                    {/* Unanswered indicator dots */}
-                    <div className="flex flex-col gap-2 px-1">
-                        <p className="text-xs font-medium text-gray-400">Skipped questions</p>
-                        <div className="flex gap-1.5 flex-wrap">
-                            {Array(unansweredCount).fill(null).map((_, i) => (
-                                <span
-                                    key={i}
-                                    className="w-6 h-6 rounded-md text-xs font-medium font-mono
-                             flex items-center justify-center"
-                                    style={{ backgroundColor: '#FFF7E0', color: '#7A4F00' }}
-                                >
-                                    —
-                                </span>
-                            ))}
+                    {/* Unanswered questions */}
+                    {unanswered > 0 && (
+                        <div className="flex flex-col gap-2 px-1">
+                            <p className="text-xs font-medium text-gray-400">
+                                Unanswered ({unanswered})
+                            </p>
+                            <div className="flex gap-1.5 flex-wrap">
+                                {unansweredNumbers.map((n) => (
+                                    <span key={n}
+                                        className="w-7 h-7 rounded-md text-xs font-medium font-mono flex items-center justify-center"
+                                        style={{ backgroundColor: '#FFF0F0', color: '#A32D2D' }}>
+                                        {n}
+                                    </span>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Marked for review */}
+                    {review > 0 && (
+                        <div className="flex flex-col gap-2 px-1">
+                            <p className="text-xs font-medium text-gray-400">
+                                Marked for review ({review})
+                            </p>
+                            <div className="flex gap-1.5 flex-wrap">
+                                {reviewNumbers.map((n) => (
+                                    <span key={n}
+                                        className="w-7 h-7 rounded-md text-xs font-medium font-mono flex items-center justify-center"
+                                        style={{ backgroundColor: '#FEF3C7', color: '#92400E' }}>
+                                        {n}
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Actions */}
                     <div className="flex gap-3">
